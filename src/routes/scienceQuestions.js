@@ -4,6 +4,16 @@ const { requireAuth, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
 
+// Real Postgres UUIDs always look like this. Questions created client-side
+// while a save was failing (e.g. during the CORS outage) got a temporary,
+// browser-generated placeholder id instead of a real one. Passing that
+// placeholder straight into a `WHERE id = $n` clause against a UUID column
+// crashes Postgres with error 22P02 ("invalid input syntax for type uuid"),
+// which rolled back the entire save (single or bulk) instead of just
+// treating that question as new. This regex lets us tell real ids apart
+// from leftover placeholders so we can INSERT instead of crashing.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function toQuestion(q) {
   if (!q) return null;
   return {
@@ -18,6 +28,15 @@ function toQuestion(q) {
     updatedAt: q.updated_at
   };
 }
+
+// Guards every /:id route below. A non-UUID id (a leftover client-side
+// placeholder, see UUID_RE comment above) would otherwise crash the query
+// with Postgres error 22P02. Treat it the same as "not found" instead —
+// clean 404, no crash.
+router.param('id', (req, res, next, id) => {
+  if (!UUID_RE.test(id)) return res.status(404).json({ error: 'Question not found' });
+  next();
+});
 
 // GET /api/science-questions?school=&className=
 router.get('/', requireAuth, async (req, res) => {
@@ -66,7 +85,7 @@ router.put('/bulk', requireAuth, requireRole('teacher', 'admin'), async (req, re
     for (const q of questions) {
       if (!q || !q.text) { saved.push(null); continue; }
       let row = null;
-      if (q.id) {
+      if (q.id && UUID_RE.test(q.id)) {
         // Use COALESCE for image so a payload that omits the field (e.g. a
         // partial resync from the frontend) never wipes out a previously
         // saved image. To intentionally clear an image, send image: '' —
