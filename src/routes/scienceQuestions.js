@@ -57,7 +57,7 @@ router.get('/:id', requireAuth, async (req, res) => {
 });
 
 // POST /api/science-questions  (teacher/admin only) — matches sqPersistOne() adding a new question
-router.post('/', requireAuth, requireRole('teacher', 'admin'), async (req, res) => {
+router.post('/', requireAuth, requireRole('admin'), async (req, res) => {
   const { text, type, category, image, school, className } = req.body;
   if (!text) return res.status(400).json({ error: 'text is required' });
   const result = await db.query(
@@ -74,7 +74,7 @@ router.post('/', requireAuth, requireRole('teacher', 'admin'), async (req, res) 
 // e.g. a fresh client-generated id) is inserted as a new row. Order of the response matches the
 // order of the request so the frontend can reconcile ids 1:1, though in practice it just reloads
 // the full list afterward.
-router.put('/bulk', requireAuth, requireRole('teacher', 'admin'), async (req, res) => {
+router.put('/bulk', requireAuth, requireRole('admin'), async (req, res) => {
   const { questions } = req.body;
   if (!Array.isArray(questions)) return res.status(400).json({ error: 'questions[] required' });
 
@@ -121,7 +121,7 @@ router.put('/bulk', requireAuth, requireRole('teacher', 'admin'), async (req, re
 });
 
 // PUT /api/science-questions/:id  (teacher/admin only) — matches sqPersistOne() editing an existing question
-router.put('/:id', requireAuth, requireRole('teacher', 'admin'), async (req, res) => {
+router.put('/:id', requireAuth, requireRole('admin'), async (req, res) => {
   const { text, type, category, image, school, className } = req.body;
   if (!text) return res.status(400).json({ error: 'text is required' });
   // Same COALESCE protection as the bulk endpoint: omitting `image` from the
@@ -138,7 +138,7 @@ router.put('/:id', requireAuth, requireRole('teacher', 'admin'), async (req, res
 });
 
 // DELETE /api/science-questions/:id  (teacher/admin only) — matches sqPersistDelete(id)
-router.delete('/:id', requireAuth, requireRole('teacher', 'admin'), async (req, res) => {
+router.delete('/:id', requireAuth, requireRole('admin'), async (req, res) => {
   const result = await db.query('DELETE FROM science_questions WHERE id = $1 RETURNING id', [req.params.id]);
   if (!result.rows[0]) return res.status(404).json({ error: 'Question not found' });
   res.json({ ok: true });
