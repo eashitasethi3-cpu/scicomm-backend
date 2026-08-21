@@ -93,6 +93,23 @@ CREATE TABLE IF NOT EXISTS exam_attempts (
 );
 
 CREATE INDEX IF NOT EXISTS idx_attempts_exam ON exam_attempts (exam_id);
+
+-- Safety net for databases that already had an exam_attempts table before this
+-- version of the schema (e.g. the live Railway DB): adds any columns/rules
+-- that a plain CREATE TABLE IF NOT EXISTS would have skipped, so this file can
+-- be re-run safely no matter what order it runs in relative to other migrations.
+ALTER TABLE exam_attempts ALTER COLUMN exam_id DROP NOT NULL;
+ALTER TABLE exam_attempts ADD COLUMN IF NOT EXISTS exam_slug TEXT;
+ALTER TABLE exam_attempts ADD COLUMN IF NOT EXISTS submission_key TEXT;
+UPDATE exam_attempts
+SET submission_key = LOWER(TRIM(COALESCE(roll_no, '') || '|' || COALESCE(school, '') || '|' || COALESCE(student_name, '')))
+WHERE submission_key IS NULL;
+ALTER TABLE exam_attempts ALTER COLUMN submission_key SET NOT NULL;
+ALTER TABLE exam_attempts DROP CONSTRAINT IF EXISTS exam_attempts_exam_id_student_id_key;
+ALTER TABLE exam_attempts DROP CONSTRAINT IF EXISTS exam_attempts_has_exam_ref;
+ALTER TABLE exam_attempts ADD CONSTRAINT exam_attempts_has_exam_ref
+  CHECK (exam_id IS NOT NULL OR exam_slug IS NOT NULL);
+
 -- One attempt per real student per exam/survey. Uses an expression index (rather
 -- than a plain UNIQUE column list) so it works whether the attempt is tied to a
 -- real exam_id or to a text exam_slug like 'science-attitude'.
