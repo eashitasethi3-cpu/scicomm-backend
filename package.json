@@ -8,6 +8,7 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "migrate": "node src/migrate.js",
+    "migrate:fix-attempts": "node src/migrate_fix_attempts.js",
     "seed": "node src/seed.js"
   },
   "dependencies": {
