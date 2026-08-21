@@ -71,54 +71,38 @@ CREATE INDEX IF NOT EXISTS idx_exams_status ON exams (status);
 
 -- ---------- EXAM ATTEMPTS ----------
 CREATE TABLE IF NOT EXISTS exam_attempts (
-  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  exam_id       UUID NOT NULL REFERENCES exams(id) ON DELETE CASCADE,
-  student_id    UUID REFERENCES users(id) ON DELETE SET NULL,
-  student_name  TEXT,
-  roll_no       TEXT,
-  section       TEXT,
-  school        TEXT,
-  score         INT,
-  total         INT,
-  pct           INT,
-  answers       JSONB DEFAULT '[]',
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (exam_id, student_id)   -- one attempt per student per exam
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  exam_id         UUID REFERENCES exams(id) ON DELETE CASCADE, -- NULL for non-exam surveys (see exam_slug)
+  exam_slug       TEXT,          -- e.g. 'science-attitude' for the S.A.S survey, which isn't a row in `exams`
+  student_id      UUID REFERENCES users(id) ON DELETE SET NULL,
+  student_name    TEXT,
+  roll_no         TEXT,
+  section         TEXT,
+  school          TEXT,
+  score           INT,
+  total           INT,
+  pct             INT,
+  answers         JSONB DEFAULT '[]',
+  -- Identifies the actual individual student who took the exam, independent of
+  -- which login account made the request. Needed because every student signs
+  -- in through ONE shared account (student@scicomm.in), so student_id above is
+  -- identical for every student and cannot be used to tell them apart.
+  submission_key  TEXT NOT NULL,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK (exam_id IS NOT NULL OR exam_slug IS NOT NULL)
 );
 
 CREATE INDEX IF NOT EXISTS idx_attempts_exam ON exam_attempts (exam_id);
+-- One attempt per real student per exam/survey. Uses an expression index (rather
+-- than a plain UNIQUE column list) so it works whether the attempt is tied to a
+-- real exam_id or to a text exam_slug like 'science-attitude'.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_attempts_unique
+  ON exam_attempts (COALESCE(exam_id::text, exam_slug), submission_key);
 
 -- ---------- SETTINGS (single row, key/value) ----------
 CREATE TABLE IF NOT EXISTS settings (
   key   TEXT PRIMARY KEY,
   value JSONB NOT NULL
-);
-
--- ---------- SCIENCE QUESTIONS (Scientific Attitude survey question bank) ----------
--- Mirrors the frontend's question shape: { id, text, type, category, image, school, className }
-CREATE TABLE IF NOT EXISTS science_questions (
-  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  text         TEXT NOT NULL,
-  type         TEXT,                          -- illustration theme, e.g. 'flask' | 'auto' | 'career'
-  category     TEXT,                          -- survey subscale, e.g. 'Rationality', 'Curiosity'
-  image        TEXT,                          -- base64 data: URL or empty string
-  school       TEXT,                          -- '' = shown to all schools
-  class_name   TEXT,                          -- '' = shown to all classes; may be a single grade or a range like '9-12'
-  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_science_questions_category ON science_questions (category);
-CREATE INDEX IF NOT EXISTS idx_science_questions_class    ON science_questions (class_name);
-
--- ---------- REGISTERED STUDENTS (student <-> exam registration link) ----------
-CREATE TABLE IF NOT EXISTS registered_students (
-  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  student_id    UUID REFERENCES users(id) ON DELETE CASCADE,
-  exam_id       UUID REFERENCES exams(id) ON DELETE CASCADE,
-  registered_by TEXT,
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (student_id, exam_id)
 );
 
 -- ---------- REFRESH TOKENS (for auth session revocation) ----------
