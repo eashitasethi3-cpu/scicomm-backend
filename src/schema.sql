@@ -69,6 +69,13 @@ CREATE TABLE IF NOT EXISTS exams (
 
 CREATE INDEX IF NOT EXISTS idx_exams_status ON exams (status);
 
+-- Lets Admin open a test for registration/entry while still holding back the
+-- actual question content until a specific synchronized moment (e.g. "open
+-- now, but don't show questions to any student until 2:45 PM"). NULL means
+-- no holdback — questions are visible as soon as status = 'open', same as
+-- before this column existed.
+ALTER TABLE exams ADD COLUMN IF NOT EXISTS reveal_at TIMESTAMPTZ;
+
 -- ---------- EXAM ATTEMPTS ----------
 CREATE TABLE IF NOT EXISTS exam_attempts (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
