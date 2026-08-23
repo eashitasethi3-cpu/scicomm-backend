@@ -83,6 +83,8 @@ CREATE TABLE IF NOT EXISTS exam_attempts (
   total           INT,
   pct             INT,
   answers         JSONB DEFAULT '[]',
+  -- How many seconds the student spent from opening the exam/survey to submitting it.
+  time_taken_seconds INT,
   -- Identifies the actual individual student who took the exam, independent of
   -- which login account made the request. Needed because every student signs
   -- in through ONE shared account (student@scicomm.in), so student_id above is
@@ -101,6 +103,7 @@ CREATE INDEX IF NOT EXISTS idx_attempts_exam ON exam_attempts (exam_id);
 ALTER TABLE exam_attempts ALTER COLUMN exam_id DROP NOT NULL;
 ALTER TABLE exam_attempts ADD COLUMN IF NOT EXISTS exam_slug TEXT;
 ALTER TABLE exam_attempts ADD COLUMN IF NOT EXISTS submission_key TEXT;
+ALTER TABLE exam_attempts ADD COLUMN IF NOT EXISTS time_taken_seconds INT;
 UPDATE exam_attempts
 SET submission_key = LOWER(TRIM(COALESCE(roll_no, '') || '|' || COALESCE(school, '') || '|' || COALESCE(student_name, '')))
 WHERE submission_key IS NULL;
