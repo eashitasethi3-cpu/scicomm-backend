@@ -6,33 +6,47 @@ const router = express.Router();
 
 // `viewerRole` decides how much of the exam this specific requester gets to see:
 //  - 'admin'         → full questions + correct answers, any time (open or closed)
-//  - 'full'          → full questions + correct answers, but ONLY once status === 'open'
-//  - 'questionsOnly' → questions + options but NOT correct answers, ONLY once status === 'open'
-//  - 'hidden'         → no question content at all (used before Admin opens the test)
+//  - 'full'          → full questions + correct answers, but ONLY once status === 'open' AND revealed
+//  - 'questionsOnly' → questions + options but NOT correct answers, ONLY once status === 'open' AND revealed
+//  - 'waiting'       → exam is open (students can register/enter details) but Admin's reveal_at
+//                      buffer hasn't passed yet — question content withheld, same as 'hidden'
+//  - 'hidden'        → no question content at all (used before Admin opens the test)
 function toExam(e, viewerRole) {
   let questions;
-  if (viewerRole === 'hidden') {
+  if (viewerRole === 'hidden' || viewerRole === 'waiting') {
     questions = []; // exam exists and is listed, but its content is not sent to the browser at all
   } else if (viewerRole === 'admin' || viewerRole === 'full') {
     questions = e.questions;
   } else {
     questions = (e.questions || []).map(q => ({ question: q.question, options: q.options })); // hide `correct`
   }
+  const withholdEverything = viewerRole === 'hidden' || viewerRole === 'waiting';
   return {
     id: e.id, title: e.title, type: e.type, duration: e.duration,
     targetClass: e.target_class, date: e.exam_date, school: e.school,
     questions, status: e.status, uploadedBy: e.uploaded_by,
     examCode: e.exam_code, examPassword: e.exam_password,
-    paperFile: viewerRole === 'hidden' ? null : e.paper_file_url, createdAt: e.created_at
+    // The paper file (for paper-upload exams) IS the question content for
+    // that exam type, so it gets withheld under the exact same conditions.
+    paperFile: withholdEverything ? null : e.paper_file_url,
+    // Sent to everyone (even while withheld) so the client can render an
+    // accurate "questions unlock at..." countdown instead of just "soon".
+    revealAt: e.reveal_at,
+    createdAt: e.created_at
   };
 }
 
 // Only Admin can see an exam's actual question content while it's closed —
 // this applies to teachers too, not just students. Everyone (including the
-// teacher who uploaded it) only sees the questions once Admin opens the test.
+// teacher who uploaded it) only sees the questions once Admin opens the test
+// AND, if Admin set a reveal_at holdback, only once that moment has passed.
+// This is enforced here (server-side, using the server's clock) rather than
+// only in the UI, so a student can't see questions early just by opening
+// devtools/network tab or hitting the API directly before reveal_at.
 function viewerRoleFor(exam, user) {
   if (user.role === 'admin') return 'admin';
   if (exam.status !== 'open') return 'hidden';
+  if (exam.reveal_at && new Date(exam.reveal_at) > new Date()) return 'waiting';
   return user.role === 'teacher' ? 'full' : 'questionsOnly';
 }
 
@@ -77,7 +91,12 @@ router.patch('/:id', requireAuth, requireRole('teacher', 'admin'), async (req, r
   if (req.body.status !== undefined && req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Only Admin can open or close a test' });
   }
-  const fields = { duration: 'duration', status: 'status', target_class: 'targetClass' };
+  // Same reasoning as `status`: only Admin decides the synchronized moment
+  // questions unlock for everyone, never a teacher.
+  if (req.body.revealAt !== undefined && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Only Admin can set when questions are revealed' });
+  }
+  const fields = { duration: 'duration', status: 'status', target_class: 'targetClass', reveal_at: 'revealAt' };
   const sets = [];
   const params = [];
   for (const [col, key] of Object.entries(fields)) {
