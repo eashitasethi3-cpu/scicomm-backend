@@ -25,28 +25,32 @@ router.patch('/', requireAuth, requireRole('admin'), async (req, res) => {
   res.json({ ok: true });
 });
 
-// GET /api/settings/sas-reveal — unlike GET /api/settings above (admin/teacher
+// GET /api/settings/sas-wait — unlike GET /api/settings above (admin/teacher
 // only), this is readable by ANY authenticated user, including students. It
-// only ever returns the one non-sensitive timestamp needed to gate the
-// Science Attitude Survey's "hang tight" waiting room, so students never see
-// other settings (e.g. studentPassword) through this route.
-router.get('/sas-reveal', requireAuth, async (req, res) => {
-  const result = await db.query(`SELECT value FROM settings WHERE key = 'sasRevealAt'`);
-  res.json({ revealAt: result.rows[0] ? result.rows[0].value : null });
+// only ever returns the one non-sensitive number needed to gate the Science
+// Attitude Survey's "hang tight" waiting room, so students never see other
+// settings (e.g. studentPassword) through this route.
+//
+// This is a DURATION (seconds), not a shared clock deadline — every student
+// who clicks "Start Exam" gets their own fresh countdown of this length,
+// starting from the moment THEY click it, rather than everyone counting down
+// to one fixed moment (which would make late arrivals see less time left).
+router.get('/sas-wait', requireAuth, async (req, res) => {
+  const result = await db.query(`SELECT value FROM settings WHERE key = 'sasWaitSeconds'`);
+  res.json({ waitSeconds: result.rows[0] ? result.rows[0].value : 0 });
 });
 
-// PATCH /api/settings/sas-reveal (admin only) — sets or clears the
-// synchronized moment the Science Attitude Survey unlocks for every student
-// at once. Body: { revealAt: <ISO string> } to set a wait, or { revealAt: null }
-// to clear it (survey opens immediately for anyone who starts it).
-router.patch('/sas-reveal', requireAuth, requireRole('admin'), async (req, res) => {
-  const revealAt = req.body.revealAt || null;
+// PATCH /api/settings/sas-wait (admin only) — sets or clears the wait
+// duration in seconds. Body: { waitSeconds: <integer> }. 0 clears any wait
+// (survey opens immediately for anyone who starts it).
+router.patch('/sas-wait', requireAuth, requireRole('admin'), async (req, res) => {
+  const waitSeconds = Math.max(0, parseInt(req.body.waitSeconds, 10) || 0);
   await db.query(
-    `INSERT INTO settings (key, value) VALUES ('sasRevealAt', $1)
+    `INSERT INTO settings (key, value) VALUES ('sasWaitSeconds', $1)
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
-    [JSON.stringify(revealAt)]
+    [JSON.stringify(waitSeconds)]
   );
-  res.json({ ok: true, revealAt });
+  res.json({ ok: true, waitSeconds });
 });
 
 module.exports = router;
