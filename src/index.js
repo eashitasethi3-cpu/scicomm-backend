@@ -10,8 +10,7 @@ const examAttemptsRoutes = require('./routes/examAttempts');
 const usersRoutes = require('./routes/users');
 const settingsRoutes = require('./routes/settings');
 const uploadsRoutes = require('./routes/uploads');
-const scienceQuestionsRoutes = require('./routes/scienceQuestions');
-const registeredStudentsRoutes = require('./routes/registeredStudents');
+const archiveRoutes = require('./routes/archive');
 const path = require('path');
 const fs = require('fs');
 
@@ -22,25 +21,8 @@ const uploadsDir = path.join(__dirname, '..', 'uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 app.use('/uploads', express.static(uploadsDir));
 
-// NOTE: previously this did `process.env.CORS_ORIGIN.split(',')`, which turns
-// CORS_ORIGIN=* into the array ['*']. The `cors` package only treats the raw
-// string "*" as a wildcard — an array containing '*' is treated as an allow-list
-// and only matches a request whose Origin header is literally "*", which never
-// happens. That silently blocked every cross-origin request (including the
-// admin panel), which the browser surfaces as "Failed to fetch".
-const rawCorsOrigin = process.env.CORS_ORIGIN || '*';
-const corsAllowList = rawCorsOrigin.split(',').map((o) => o.trim());
-
 app.use(cors({
-  origin: (origin, callback) => {
-    // No Origin header = same-origin, curl, server-to-server, etc. — allow.
-    if (!origin) return callback(null, true);
-    if (corsAllowList.includes('*') || corsAllowList.includes(origin)) {
-      return callback(null, true);
-    }
-    return callback(new Error(`Origin ${origin} not allowed by CORS`));
-  },
-  credentials: true,
+  origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : '*',
 }));
 app.use(express.json({ limit: '5mb' })); // exam papers, question sets etc.
 
@@ -57,8 +39,7 @@ app.use('/api/exam-attempts', examAttemptsRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/uploads', uploadsRoutes);
-app.use('/api/science-questions', scienceQuestionsRoutes);
-app.use('/api/registered-students', registeredStudentsRoutes);
+app.use('/api/archive', archiveRoutes);
 
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 
