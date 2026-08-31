@@ -126,6 +126,39 @@ ALTER TABLE exam_attempts ADD CONSTRAINT exam_attempts_has_exam_ref
 CREATE UNIQUE INDEX IF NOT EXISTS idx_attempts_unique
   ON exam_attempts (COALESCE(exam_id::text, exam_slug), submission_key);
 
+-- The physical address of the school a student typed at exam/survey time.
+-- Required going forward (enforced in the API layer, not a NOT NULL here,
+-- so older rows recorded before this column existed don't break). Used
+-- together with `school` to auto-group the same physical school in the
+-- Archive even when the name is typed in full vs. shortened.
+ALTER TABLE exam_attempts ADD COLUMN IF NOT EXISTS school_address TEXT;
+
+-- ---------- SCHOOL GROUPS (Admin-managed merge of duplicate school entries) ----------
+-- Lets Admin explicitly say "these different typed name/address variants are
+-- actually the same physical school" when automatic address-text matching
+-- doesn't catch it (typos, very different phrasing, abbreviations in the
+-- address itself, missing PIN code, etc.). Automatic matching (same
+-- normalized address) already handles the common "full name vs short name"
+-- case without needing a manual merge at all.
+CREATE TABLE IF NOT EXISTS school_groups (
+  id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  canonical_name     TEXT NOT NULL,
+  canonical_address  TEXT NOT NULL,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Each row maps one "raw" normalized-address key (as typed by students, one
+-- key per distinct normalized address text) to the school_groups entry Admin
+-- decided it belongs to. Looked up at Archive-render time to fold that raw
+-- key's attempts into the merged group instead of its own bucket.
+CREATE TABLE IF NOT EXISTS school_aliases (
+  raw_key         TEXT PRIMARY KEY,
+  group_id        UUID NOT NULL REFERENCES school_groups(id) ON DELETE CASCADE,
+  sample_name     TEXT,
+  sample_address  TEXT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- ---------- SETTINGS (single row, key/value) ----------
 CREATE TABLE IF NOT EXISTS settings (
   key   TEXT PRIMARY KEY,
