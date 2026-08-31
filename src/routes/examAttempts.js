@@ -1,6 +1,7 @@
 const express = require('express');
 const db = require('../db');
 const { requireAuth, requireRole } = require('../middleware/auth');
+const { validateHumanName, validateSchoolName, validateAddress } = require('../validation');
 
 const router = express.Router();
 
@@ -11,7 +12,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 function toAttempt(a) {
   return {
     id: a.id, examId: a.exam_id || a.exam_slug, studentId: a.student_id, studentName: a.student_name,
-    rollNo: a.roll_no, section: a.section, school: a.school,
+    rollNo: a.roll_no, section: a.section, school: a.school, schoolAddress: a.school_address,
     score: a.score, total: a.total, pct: a.pct, date: a.created_at, answers: a.answers,
     timeTakenSeconds: a.time_taken_seconds
   };
@@ -22,8 +23,18 @@ function toAttempt(a) {
 // never trust a client-submitted score. The S.A.S survey has no right/wrong
 // answers, so for that one we trust the client's completion count instead.
 router.post('/', requireAuth, async (req, res) => {
-  const { examId, studentName, rollNo, section, school, answers, timeTakenSeconds } = req.body;
+  const { examId, studentName, rollNo, section, school, schoolAddress, answers, timeTakenSeconds } = req.body;
   if (!examId || !Array.isArray(answers)) return res.status(400).json({ error: 'examId and answers[] required' });
+
+  // Name / school / address are compulsory and must pass basic sanity checks
+  // (real-looking values, not placeholder junk like "abc"/"xyz"/"test"). This
+  // is a heuristic filter, not identity verification.
+  const nameErr = validateHumanName(studentName);
+  if (nameErr) return res.status(400).json({ error: nameErr });
+  const schoolErr = validateSchoolName(school);
+  if (schoolErr) return res.status(400).json({ error: schoolErr });
+  const addressErr = validateAddress(schoolAddress);
+  if (addressErr) return res.status(400).json({ error: addressErr });
 
   // All students authenticate through ONE shared login (student@scicomm.in), so
   // req.user.id is identical for every student and can't identify who actually
@@ -68,12 +79,13 @@ router.post('/', requireAuth, async (req, res) => {
     }
 
     const result = await db.query(
-      `INSERT INTO exam_attempts (exam_id, exam_slug, student_id, student_name, roll_no, section, school, score, total, pct, answers, submission_key, time_taken_seconds)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+      `INSERT INTO exam_attempts (exam_id, exam_slug, student_id, student_name, roll_no, section, school, school_address, score, total, pct, answers, submission_key, time_taken_seconds)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
        ON CONFLICT (COALESCE(exam_id::text, exam_slug), submission_key) DO UPDATE
-         SET score = EXCLUDED.score, total = EXCLUDED.total, pct = EXCLUDED.pct, answers = EXCLUDED.answers, time_taken_seconds = EXCLUDED.time_taken_seconds
+         SET score = EXCLUDED.score, total = EXCLUDED.total, pct = EXCLUDED.pct, answers = EXCLUDED.answers,
+             time_taken_seconds = EXCLUDED.time_taken_seconds, school_address = EXCLUDED.school_address
        RETURNING *`,
-      [examId_, examSlug, req.user.id, studentName, rollNo, section, school, score, total, pct, answersJson, submissionKey, timeTakenSeconds || null]
+      [examId_, examSlug, req.user.id, studentName, rollNo, section, school, schoolAddress, score, total, pct, answersJson, submissionKey, timeTakenSeconds || null]
     );
     res.status(201).json({ ok: true, submitted: toAttempt(result.rows[0]) }); // score intentionally not surfaced to student
   } catch (err) {
