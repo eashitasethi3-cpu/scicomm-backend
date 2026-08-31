@@ -13,6 +13,7 @@ const uploadsRoutes = require('./routes/uploads');
 const archiveRoutes = require('./routes/archive');
 const scienceQuestionsRoutes = require('./routes/scienceQuestions');
 const registeredStudentsRoutes = require('./routes/registeredStudents');
+const galleryRoutes = require('./routes/gallery');
 const path = require('path');
 const fs = require('fs');
 
@@ -44,6 +45,7 @@ app.use('/api/uploads', uploadsRoutes);
 app.use('/api/archive', archiveRoutes);
 app.use('/api/science-questions', scienceQuestionsRoutes);
 app.use('/api/registered-students', registeredStudentsRoutes);
+app.use('/api/gallery', galleryRoutes);
 
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 
