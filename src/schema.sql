@@ -159,6 +159,14 @@ CREATE TABLE IF NOT EXISTS school_aliases (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- ---------- GALLERY IMAGES (public site photo gallery, admin-managed) ----------
+CREATE TABLE IF NOT EXISTS gallery_images (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  url          TEXT NOT NULL,       -- e.g. '/uploads/<filename>', served by the backend's static /uploads route
+  uploaded_by  UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- ---------- SETTINGS (single row, key/value) ----------
 CREATE TABLE IF NOT EXISTS settings (
   key   TEXT PRIMARY KEY,
