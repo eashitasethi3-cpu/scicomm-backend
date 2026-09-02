@@ -108,4 +108,12 @@ router.get('/', requireAuth, requireRole('admin'), async (req, res) => {
   res.json(result.rows.map(toAttempt));
 });
 
+// DELETE /api/exam-attempts/:id  (admin only — lets the admin clear out a
+// single result row, e.g. junk/test submissions like "abc"/"xyz").
+router.delete('/:id', requireAuth, requireRole('admin'), async (req, res) => {
+  const result = await db.query('DELETE FROM exam_attempts WHERE id = $1 RETURNING id', [req.params.id]);
+  if (!result.rows[0]) return res.status(404).json({ error: 'Attempt not found' });
+  res.json({ ok: true });
+});
+
 module.exports = router;
