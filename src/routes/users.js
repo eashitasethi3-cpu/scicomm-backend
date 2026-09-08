@@ -25,9 +25,13 @@ function publicUser(u) {
 router.get('/schools/public', async (req, res) => {
   try {
     const result = await db.query(
-      `SELECT school_name, name, address, created_at FROM users WHERE role = 'school' ORDER BY created_at DESC`
+      `SELECT id, school_name, name, address, created_at FROM users WHERE role = 'school' ORDER BY created_at DESC`
     );
+    // `id` is included so the Admin (only) can remove a school straight from
+    // the Connections page — it's not sensitive on its own and nothing else
+    // from the account (email, phone, etc.) is exposed here.
     const schools = result.rows.map(r => ({
+      id: r.id,
       schoolName: r.school_name || r.name,
       address: r.address || '',
       registeredAt: r.created_at,
