@@ -14,6 +14,31 @@ function publicUser(u) {
   };
 }
 
+// ------------------------------------------------------------------
+// GET /api/users/schools/public   (PUBLIC — no auth required)
+//
+// Powers the "Connections" page: every school that has registered on
+// the site, automatically, with just the school name, the place it's
+// from, and the date it registered. No email, phone, or any other
+// account detail is exposed here — that stays Admin-only via GET /.
+// ------------------------------------------------------------------
+router.get('/schools/public', async (req, res) => {
+  try {
+    const result = await db.query(
+      `SELECT school_name, name, address, created_at FROM users WHERE role = 'school' ORDER BY created_at DESC`
+    );
+    const schools = result.rows.map(r => ({
+      schoolName: r.school_name || r.name,
+      address: r.address || '',
+      registeredAt: r.created_at,
+    }));
+    res.json({ schools });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to load connections' });
+  }
+});
+
 // GET /api/users  (admin only — powers the admin panel's user table)
 router.get('/', requireAuth, requireRole('admin'), async (req, res) => {
   const { role } = req.query;
