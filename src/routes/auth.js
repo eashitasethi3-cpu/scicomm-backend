@@ -157,4 +157,41 @@ router.get('/me', requireAuth, async (req, res) => {
   res.json({ user: publicUser(result.rows[0]) });
 });
 
+// ---------------- CHANGE OWN PASSWORD ----------------
+// Any signed-in user can change their own account password here, but the
+// caller must prove they know the CURRENT password first (unlike the generic
+// PATCH /api/users/:id, which is admin-facing and doesn't check this). This
+// is what powers "change my password" from the Admin Panel itself.
+router.post('/change-password', requireAuth, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'currentPassword and newPassword are required' });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters' });
+    }
+
+    const result = await db.query('SELECT * FROM users WHERE id = $1', [req.user.id]);
+    const user = result.rows[0];
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const ok = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!ok) return res.status(401).json({ error: 'Current password is incorrect' });
+
+    const hash = await bcrypt.hash(newPassword, 12);
+    await db.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, req.user.id]);
+
+    // Invalidate existing refresh tokens so old sessions elsewhere are logged
+    // out once the password changes; this device keeps working off its
+    // current access token until it naturally expires / re-logs in.
+    await db.query('DELETE FROM refresh_tokens WHERE user_id = $1', [req.user.id]);
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to change password' });
+  }
+});
+
 module.exports = router;
