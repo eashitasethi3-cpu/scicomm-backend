@@ -14,10 +14,13 @@ const archiveRoutes = require('./routes/archive');
 const scienceQuestionsRoutes = require('./routes/scienceQuestions');
 const registeredStudentsRoutes = require('./routes/registeredStudents');
 const galleryRoutes = require('./routes/gallery');
+const parentRegistrationsRoutes = require('./routes/parentRegistrations');
 const path = require('path');
 const fs = require('fs');
 
 const app = express();
+// Behind Railway/Render's proxy: lets rate limiters see the real client IP.
+app.set('trust proxy', 1);
 
 // Ensure the uploads folder exists before multer tries to write to it.
 const uploadsDir = path.join(__dirname, '..', 'uploads');
@@ -46,6 +49,7 @@ app.use('/api/archive', archiveRoutes);
 app.use('/api/science-questions', scienceQuestionsRoutes);
 app.use('/api/registered-students', registeredStudentsRoutes);
 app.use('/api/gallery', galleryRoutes);
+app.use('/api/parent-registrations', parentRegistrationsRoutes);
 
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 
