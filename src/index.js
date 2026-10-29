@@ -27,9 +27,8 @@ const uploadsDir = path.join(__dirname, '..', 'uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 app.use('/uploads', express.static(uploadsDir));
 
-app.use(cors({
-  origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : '*',
-}));
+app.use(cors());
+
 app.use(express.json({ limit: '5mb' })); // exam papers, question sets etc.
 
 // Basic protection against brute-force login/register spam.
